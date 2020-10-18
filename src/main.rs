@@ -1,4 +1,5 @@
 use std::env;
+use std::process;
 use std::net::*;
 use getopts::Options;
 use regex::Regex;
@@ -7,11 +8,13 @@ fn request_constructor(url: &str) -> (String, String) {
 
     let regex = Regex::new(r"(?i)^(https?)://([^\s$.?#/][a-zA-Z0-9_.]*)/*([^\s$?#]*)").unwrap();
 
-    if !regex.is_match(&url) {
-        panic!{"Invalid URL. URL must be in format http(s)://example.com/(resource)"};
-    }
-
-    let captures = regex.captures(&url).unwrap(); // Check if this fails??
+    let captures = match regex.captures(&url) {
+        Some(c) => c,
+        None => {
+            println!("Invalid URL");
+            process::exit(0);
+        }
+    };
 
     let protocol = captures.get(1).map_or("", |m| m.as_str());
     let host = captures.get(2).map_or("", |m| m.as_str());
@@ -21,7 +24,8 @@ fn request_constructor(url: &str) -> (String, String) {
         "http" => "80",
         "https" => "443",
         _ => {
-            panic!{"Invalid Protocol. Use HTTP or HTTPS"};
+            println!("Invalid URL");
+            process::exit(0);
         }
     };
 
@@ -33,8 +37,7 @@ fn request_constructor(url: &str) -> (String, String) {
     (url, resource.to_string())
 }
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
+fn parse_args(args: &[String]) -> (String, i32){
 
     let mut opts = Options::new();
 
@@ -49,19 +52,53 @@ fn main() {
 
     if matches.opt_present("h") {
         println!("{}", opts.usage("Usage"));
-        return;
-    }
-
-    let url = match matches.opt_str("u") {
-        Some(u) => u,
-        None => return
+        process::exit(0);
     };
 
-    let (url, resource) = request_constructor(&url[..]);
+    let url = match matches.opt_str("u") {
+        Some(u) => u.to_string(),
+        None => {
+            println!("Error reading URL");
+            process::exit(0);
+        }
+    };
 
+    let profile = match matches.opt_str("p") {
+        Some(p) => p.trim().parse().expect("Expected a number for --profile"),
+        None => 0
+    };
+
+    (url, profile)
+}
+
+fn main() {
+    let args: Vec<String> = env::args().collect();
+
+    let (url, profile) = parse_args(&args);
+    println!("{} {}", url, profile);
+
+    let (url, resource) = request_constructor(&url[..]);
     println!("{} {}", url, resource);
 
-    let addrs_iter = &mut url.to_socket_addrs().unwrap();
-    println!("{:?}", addrs_iter.next());
+    let resolve = &mut url[..].to_socket_addrs();
+    let addrs_iter = match resolve {
+        Ok(i) => i,
+        Err(_) => {
+            println!("Could not resolve host");
+            process::exit(0)
+        }
+    };
+
+    let ip = match addrs_iter.next() {
+        Some(i) => i,
+        None => {
+            println!("Could not resolve host");
+            process::exit(0)
+        }
+    };
+
+    let stream = TcpStream::connect(ip);
+
+    println!("{:?}", stream);
 
 }
