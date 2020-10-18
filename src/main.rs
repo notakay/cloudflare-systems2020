@@ -3,10 +3,12 @@ use std::process;
 use std::net::*;
 use getopts::Options;
 use regex::Regex;
+use std::io::{Read, Write};
+use std::str::from_utf8;
 
-fn request_constructor(url: &str) -> (String, String) {
+fn request_constructor(url: &str) -> (String, String, String) {
 
-    let regex = Regex::new(r"(?i)^(https?)://([^\s$.?#/][a-zA-Z0-9_.]*)/*([^\s$?#]*)").unwrap();
+    let regex = Regex::new(r"(?i)^(https?)://([^\s$.?#/][a-zA-Z0-9_\-.]*)/*([^\s$?#]*)").unwrap();
 
     let captures = match regex.captures(&url) {
         Some(c) => c,
@@ -34,7 +36,7 @@ fn request_constructor(url: &str) -> (String, String) {
     url.push_str(":");
     url.push_str(port);
 
-    (url, resource.to_string())
+    (host.to_string(), url, resource.to_string())
 }
 
 fn parse_args(args: &[String]) -> (String, i32){
@@ -77,7 +79,7 @@ fn main() {
     let (url, profile) = parse_args(&args);
     println!("{} {}", url, profile);
 
-    let (url, resource) = request_constructor(&url[..]);
+    let (host, url, resource) = request_constructor(&url[..]);
     println!("{} {}", url, resource);
 
     let resolve = &mut url[..].to_socket_addrs();
@@ -97,7 +99,23 @@ fn main() {
         }
     };
 
-    let stream = TcpStream::connect(ip);
+    let mut stream = TcpStream::connect(ip).unwrap();
+
+    let mut message = String::from("");
+    message.push_str("GET / HTTP/1.1\r\n");
+    message.push_str("Host: ");
+    message.push_str(&host);
+    message.push_str("\r\n");
+    message.push_str("Connection: keep-alive");
+    message.push_str("\r\n\r\n");
+
+    println!("Message: {}", message);
+
+    stream.write(message.as_bytes()).unwrap();
+    let mut buffer = [0; 13000];
+
+    stream.read(&mut buffer).unwrap();
+    println!("Request: {}", String::from_utf8_lossy(&buffer[..]));
 
     println!("{:?}", stream);
 
