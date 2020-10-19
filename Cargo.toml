@@ -1,5 +1,5 @@
 [package]
-name = "systems-engineering-assignment"
+name = "rustmark"
 version = "0.1.0"
 authors = ["akay <aungkhantko@protonmail.com>"]
 edition = "2018"
