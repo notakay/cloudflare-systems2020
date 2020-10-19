@@ -1,22 +1,68 @@
-use std::env;
-use std::process;
-use std::io::{Read, Write};
+use std::{env, process, thread};
+use std::io::{Write};
 use std::net::*;
+use std::sync::Arc;
+
+use regex::Regex;
 use devtimer::DevTime;
 use getopts::Options;
-use openssl::ssl::{SslMethod, SslConnector, SslStream};
-use regex::Regex;
+use openssl::ssl::{SslMethod, SslConnector};
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let (url, count) = parse_args(&args);
+    let (url, count, profile) = parse_args(&args);
     let (url, host, resource, ssl) = delim_url(&url);
-    println!("URL: {}   Host: {}   Resource: {}   SSL: {}", url, host, resource, ssl);
 
     let ip = resolve_host(&url);
     let message = message_constructor(&host, &resource);
 
-    make_request(&message.as_bytes(), ip, &host, ssl);
+    let message = Arc::new(message);
+    let ip = Arc::new(ip);
+    let host = Arc::new(host);
+
+    let mut children = vec![];
+
+    for _ in 0..count {
+        let r_message = message.clone();
+        let r_ip = ip.clone();
+        let r_host = host.clone();
+
+        children.push(thread::spawn(move || make_request(&r_message, &r_ip, &r_host, ssl, profile)));
+    }
+
+    let mut max_size = usize::MIN;
+    let mut min_size = usize::MAX;
+    let mut times = vec![];
+    let mut time_total:u128 = 0;
+
+   	for child in children {
+        match child.join() {
+            Ok(x) => {
+
+                if x.0 > max_size {
+                    max_size = x.0;
+                }
+
+                if x.0 < min_size {
+                    min_size = x.0;
+                }
+
+                times.push(x.1);
+                time_total += x.1;
+            }
+            Err(_) => {}
+        };
+    }
+
+    if profile {
+        times.sort();
+
+        println!("Max size: {} bytes, Min size: {} bytes", max_size, min_size);
+
+        let num_requests = times.len() as u128;
+        println!("Max time: {} ms, Min time: {} ms, Mean time: {} ms, Median time: {} ms",
+                 times[times.len()-1], times[0], time_total/num_requests, times[times.len()/2]);
+    }
 }
 
 fn delim_url(url: &str) -> (String, String, String, bool) {
@@ -90,24 +136,7 @@ fn delim_url(url: &str) -> (String, String, String, bool) {
 
 }
 
-fn ssl_read(ssl_stream: &mut SslStream<TcpStream>) -> usize {
-
-    let mut buffer = [0u8; 1000];
-    let mut bytes = 0;
-
-    loop {
-        let bytes_read = ssl_stream.read(&mut buffer).unwrap();
-        if bytes_read > 0 {
-            bytes += bytes_read;
-        } else {
-            break;
-        }
-    }
-
-    bytes
-}
-
-fn tcp_read(stream: &mut TcpStream) -> usize {
+fn read_stream<T: std::io::Read>(stream: &mut T, profile: bool) -> usize {
 
     let mut buffer = [0u8; 1000];
     let mut bytes = 0;
@@ -116,19 +145,27 @@ fn tcp_read(stream: &mut TcpStream) -> usize {
         let bytes_read = stream.read(&mut buffer).unwrap();
         if bytes_read > 0 {
             bytes += bytes_read;
+            if !profile {
+                print!("{}", String::from_utf8_lossy(&buffer));
+            }
         } else {
             break;
         }
     }
 
+    if !profile {
+        println!("");
+    }
+
     bytes
+
 }
 
-fn make_request(message: &[u8], ip: SocketAddr, host: &str, ssl: bool) {
+fn make_request(message: &str, ip: &SocketAddr, host: &str, ssl: bool, profile: bool) -> (usize, u128) {
+    let message = message.as_bytes();
 
     let mut timer = DevTime::new_simple();
     timer.start();
-
     let mut stream = TcpStream::connect(ip).unwrap();
     let bytes;
 
@@ -136,15 +173,14 @@ fn make_request(message: &[u8], ip: SocketAddr, host: &str, ssl: bool) {
         let connector = SslConnector::builder(SslMethod::tls()).unwrap().build();
         let mut ssl_stream = connector.connect(&host, stream).unwrap();
         ssl_stream.write_all(message).unwrap();
-        bytes = ssl_read(&mut ssl_stream);
+        bytes = read_stream(&mut ssl_stream, profile);
     } else {
         stream.write_all(message).unwrap();
-        bytes = tcp_read(&mut stream);
+        bytes = read_stream(&mut stream, profile);
     }
     timer.stop();
-    //println!("{}", String::from_utf8_lossy(&buffer));
-    println!("{} bytes read", bytes);
-    println!("The time taken for the operation was: {} millis", timer.time_in_millis().unwrap());
+    let time = timer.time_in_millis().unwrap();
+    (bytes, time)
 }
 
 fn resolve_host(url: &str) -> SocketAddr {
@@ -170,9 +206,10 @@ fn resolve_host(url: &str) -> SocketAddr {
 
 }
 
-fn parse_args(args: &[String]) -> (String, i32) {
+fn parse_args(args: &[String]) -> (String, i32, bool) {
 
     let mut opts = Options::new();
+    let mut profile = false;
 
     opts.optopt("u", "url", "Request URL", "URL");
     opts.optopt("p", "profile", "URL to profile", "COUNT");
@@ -196,12 +233,15 @@ fn parse_args(args: &[String]) -> (String, i32) {
         }
     };
 
-    let profile = match matches.opt_str("p") {
-        Some(p) => p.trim().parse().expect("Expected a number for --profile"),
-        None => 0
+    let count = match matches.opt_str("p") {
+        Some(p) => {
+            profile = true;
+            p.trim().parse().expect("Expected a number for --profile")
+        },
+        None => 1
     };
 
-    (url, profile)
+    (url, count, profile)
 
 }
 
