@@ -7,6 +7,18 @@ use getopts::Options;
 use openssl::ssl::{SslMethod, SslConnector, SslStream};
 use regex::Regex;
 
+fn main() {
+    let args: Vec<String> = env::args().collect();
+    let (url, count) = parse_args(&args);
+    let (url, host, resource, ssl) = delim_url(&url);
+    println!("URL: {}   Host: {}   Resource: {}   SSL: {}", url, host, resource, ssl);
+
+    let ip = resolve_host(&url);
+    let message = message_constructor(&host, &resource);
+
+    make_request(&message.as_bytes(), ip, &host, ssl);
+}
+
 fn delim_url(url: &str) -> (String, String, String, bool) {
 
     // Identify protocol
@@ -112,13 +124,13 @@ fn tcp_read(stream: &mut TcpStream) -> usize {
     bytes
 }
 
-fn make_request(message: &[u8], ip: SocketAddr, host: String, ssl: bool) {
+fn make_request(message: &[u8], ip: SocketAddr, host: &str, ssl: bool) {
 
     let mut timer = DevTime::new_simple();
     timer.start();
 
     let mut stream = TcpStream::connect(ip).unwrap();
-    let mut bytes = 0;
+    let bytes;
 
     if ssl {
         let connector = SslConnector::builder(SslMethod::tls()).unwrap().build();
@@ -135,7 +147,7 @@ fn make_request(message: &[u8], ip: SocketAddr, host: String, ssl: bool) {
     println!("The time taken for the operation was: {} millis", timer.time_in_millis().unwrap());
 }
 
-fn resolve_host(url: String) -> SocketAddr {
+fn resolve_host(url: &str) -> SocketAddr {
 
     let resolve = &mut url[..].to_socket_addrs();
     let addrs_iter = match resolve {
@@ -202,27 +214,4 @@ fn message_constructor(host: &str, resource: &str) -> String {
     message.push_str("\r\nConnection: close");
     message.push_str("\r\n\r\n");
     message
-}
-
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    let (url, _count) = parse_args(&args);
-    let (url, host, resource, ssl) = delim_url(&url[..]);
-    println!("URL: {}   Host: {}   Resource: {}   SSL: {}", url, host, resource, ssl);
-
-    let ip = resolve_host(url);
-    let message = message_constructor(&host, &resource);
-
-    println!("{}", message);
-
-    make_request(&message.as_bytes(), ip, host, ssl);
-
-    /*
-    if count > 0 {
-        profile(count);
-    } else {
-        let message = message_constructor(&host, &resource);
-        make_request(&message.as_bytes(), ip);
-    }
-    */
 }

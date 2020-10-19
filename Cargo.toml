@@ -10,4 +10,5 @@ edition = "2018"
 getopts = "0.2"
 regex = "1"
 devtimer = "4.0"
-openssl = { version = "0.10", features = ["vendored"] }
+openssl-sys = "0.9"
+openssl = "0.10"
