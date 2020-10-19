@@ -4,28 +4,31 @@ use std::io::{Read, Write};
 use std::net::*;
 use devtimer::DevTime;
 use getopts::Options;
+use openssl::ssl::{SslMethod, SslConnector};
 use regex::Regex;
 
-fn delim_url(url: &str) -> (String, String, String) {
+fn delim_url(url: &str) -> (String, String, String, bool) {
 
     // Identify protocol
     let regex = Regex::new(r"(?i)(.*)://.*").unwrap();
 
-    let mut protocol = match regex.captures(&url) {
+    let protocol = match regex.captures(&url) {
         Some(c) => c.get(1).map_or("", |m| m.as_str()),
-        None => ""
+        None => {
+            println!("Protocol not defined, assuming HTTP on port 80");
+            "http"
+        }
     };
 
-    let mut port: &str;
+    let port: &str;
+    let mut ssl = false;
 
     match protocol {
         "http" => port = "80",
-        "https" => port = "443",
-        "" => {
-            protocol = "http";
-            port = "80";
-            println!("Protocol not defined, assuming HTTP on port 80");
-        },
+        "https" => {
+            port = "443";
+            ssl = true;
+        }
         _ => {
             println!("Unsupported protocol");
             process::exit(0);
@@ -71,20 +74,27 @@ fn delim_url(url: &str) -> (String, String, String) {
     url.push_str(":");
     url.push_str(port);
 
-    (url, host.to_string(), resource.to_string())
+    (url, host.to_string(), resource.to_string(), ssl)
 
 }
 
-fn make_request(message: &[u8], ip: SocketAddr) {
+fn make_request(message: &[u8], ip: SocketAddr, host: String, ssl: bool) {
 
     let mut timer = DevTime::new_simple();
     timer.start();
-    let mut stream = TcpStream::connect(ip).unwrap();
 
-    stream.write(message).unwrap();
+    let mut stream = TcpStream::connect(ip).unwrap();
     let mut buffer = [0; 1000 * 1000];
 
-    stream.read(&mut buffer).unwrap();
+    if ssl {
+        let connector = SslConnector::builder(SslMethod::tls()).unwrap().build();
+        let mut tcp_stream = connector.connect(&host, stream).unwrap();
+        tcp_stream.write_all(message).unwrap();
+        tcp_stream.read(&mut buffer).unwrap();
+    } else {
+        stream.write_all(message).unwrap();
+        stream.read(&mut buffer).unwrap();
+    }
     timer.stop();
     println!("{}", String::from_utf8_lossy(&buffer));
     println!("The time taken for the operation was: {} millis", timer.time_in_millis().unwrap());
@@ -148,10 +158,6 @@ fn parse_args(args: &[String]) -> (String, i32) {
 
 }
 
-fn profile(count: i32) {
-    println!("{}", count);
-}
-
 fn message_constructor(host: &str, resource: &str) -> String {
     let mut message = String::from("GET ");
     message.push_str(&resource);
@@ -164,13 +170,16 @@ fn message_constructor(host: &str, resource: &str) -> String {
 
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let (url, count) = parse_args(&args);
-    let (url, host, resource) = delim_url(&url[..]);
-    println!("URL: {}   Host: {}   Resource: {}", url, host, resource);
+    let (url, _count) = parse_args(&args);
+    let (url, host, resource, ssl) = delim_url(&url[..]);
+    println!("URL: {}   Host: {}   Resource: {}   SSL: {}", url, host, resource, ssl);
 
     let ip = resolve_host(url);
     let message = message_constructor(&host, &resource);
+
     println!("{}", message);
+
+    make_request(&message.as_bytes(), ip, host, ssl);
 
     /*
     if count > 0 {
