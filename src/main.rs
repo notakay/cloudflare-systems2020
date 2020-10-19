@@ -48,7 +48,7 @@ fn delim_url(url: &str) -> (String, String, String) {
     };
 
     // Separate host from resource
-    let regex = Regex::new(r"(?i)([a-z0-9._\-]*)/*([a-z0-9._\-/]*)").unwrap();
+    let regex = Regex::new(r"(?i)([a-z0-9._\-]*)(/*[a-z0-9._\-/]*)").unwrap();
 
     let captures = match regex.captures(&url) {
         Some(c) => c,
@@ -153,7 +153,7 @@ fn profile(count: i32) {
 }
 
 fn message_constructor(host: &str, resource: &str) -> String {
-    let mut message = String::from("GET /");
+    let mut message = String::from("GET ");
     message.push_str(&resource);
     message.push_str(" HTTP/1.1\r\n");
     message.push_str("Host: ");
@@ -166,11 +166,13 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let (url, count) = parse_args(&args);
     let (url, host, resource) = delim_url(&url[..]);
-    println!("{} {} {}", url, host, resource);
-    /*
-    let (host, url, resource) = delim_url(&url[..]);
-    let ip = resolve_host(url);
+    println!("URL: {}   Host: {}   Resource: {}", url, host, resource);
 
+    let ip = resolve_host(url);
+    let message = message_constructor(&host, &resource);
+    println!("{}", message);
+
+    /*
     if count > 0 {
         profile(count);
     } else {
