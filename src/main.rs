@@ -5,7 +5,7 @@ use getopts::Options;
 use regex::Regex;
 use std::io::{Read, Write};
 
-fn request_constructor(url: &str) -> (String, String, String) {
+fn delim_url(url: &str) -> (String, String, String) {
 
     let regex = Regex::new(r"(?i)([a-z0-9._\-]*)/*([a-z0-9._\-/]*)").unwrap();
 
@@ -29,23 +29,15 @@ fn request_constructor(url: &str) -> (String, String, String) {
     (host.to_string(), url, resource.to_string())
 }
 
-fn make_request(host: &str, resource: &str, ip: SocketAddr) {
+fn make_request(message: &[u8], ip: SocketAddr) {
 
     let mut stream = TcpStream::connect(ip).unwrap();
 
-    let mut message = String::from("GET /");
-    message.push_str(&resource);
-    message.push_str(" HTTP/1.1\r\n");
-    message.push_str("Host: ");
-    message.push_str(&host);
-    message.push_str("\r\n\r\n");
-
-    stream.write(message.as_bytes()).unwrap();
+    stream.write(message).unwrap();
     let mut buffer = [0; 1000 * 1000];
 
     stream.read(&mut buffer).unwrap();
-    println!("{}", String::from_utf8_lossy(&buffer[..]));
-
+    println!("{}", String::from_utf8_lossy(&buffer));
 }
 
 fn resolve_host(url: String) -> SocketAddr {
@@ -106,11 +98,30 @@ fn parse_args(args: &[String]) -> (String, i32) {
 
 }
 
+fn profile(count: i32) {
+    println!("{}", count);
+}
+
+fn message_constructor(host: &str, resource: &str) -> String {
+    let mut message = String::from("GET /");
+    message.push_str(&resource);
+    message.push_str(" HTTP/1.1\r\n");
+    message.push_str("Host: ");
+    message.push_str(&host);
+    message.push_str("\r\n\r\n");
+    message
+}
+
 fn main() {
     let args: Vec<String> = env::args().collect();
-    let (url, profile) = parse_args(&args);
-    let (host, url, resource) = request_constructor(&url[..]);
+    let (url, count) = parse_args(&args);
+    let (host, url, resource) = delim_url(&url[..]);
     let ip = resolve_host(url);
 
-    make_request(&host, &resource, ip);
+    if count > 0 {
+        profile(count);
+    } else {
+        let message = message_constructor(&host, &resource);
+        let buf = make_request(&message.as_bytes(), ip);
+    }
 }
