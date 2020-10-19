@@ -10,12 +10,21 @@ use getopts::Options;
 use openssl::ssl::{SslMethod, SslConnector};
 
 fn main() {
+
+    // Get arguments using get opts. Parse URL using regexp
+    // Resolve DNS using networking primitives from std::net
+    // Construct a GET request to the resource in URL
+
     let args: Vec<String> = env::args().collect();
     let (url, count, profile) = parse_args(&args);
     let (url, host, resource, ssl) = delim_url(&url);
 
     let ip = resolve_host(&url);
     let message = message_constructor(&host, &resource);
+
+    // Perform a GET requests on separate threads
+    // Read/Write over sockets using TcpStream (also part of std:net)
+    // Used openssl to set up TLS for websites using TLS/SSL
 
     let message = Arc::new(message);
     let ip = Arc::new(ip);
@@ -42,14 +51,8 @@ fn main() {
    	for child in children {
         match child.join() {
             Ok(x) => {
-
-                if x.0 > max_size {
-                    max_size = x.0;
-                }
-
-                if x.0 < min_size {
-                    min_size = x.0;
-                }
+                if x.0 > max_size { max_size = x.0; }
+                if x.0 < min_size { min_size = x.0; }
 
                 if x.2 == "200" {
                     success += 1;
@@ -65,11 +68,11 @@ fn main() {
         };
     }
 
+    // Output for profiling
+
     if profile {
         times.sort();
-
         let rate = (success as f32 / count as f32) * 100.0;
-
         println!("Made {} GET requests with {}% success rate ({} requests failed)", count, rate, fail);
         println!("The maximum response size was {} bytes. The minimum response size was {} bytes", max_size, min_size);
         println!("The maximum time taken to receive the response was {} ms. The minimum time taken to receive the response was {} ms.", times[times.len()-1], times[0]);
@@ -78,6 +81,13 @@ fn main() {
     }
 }
 
+// Breaks down a URL into protocol, host and resource
+// Protocol has to be http or https
+// If a protocol is not defined assume it's http and prot 80
+//
+// Takes in a raw URL, example "https://www.example.com/res"
+// Returns host:port, host, resource, sslEnabled
+//  (example: "www.example.com:443", "www.example.com", "/res", true)
 fn delim_url(url: &str) -> (String, String, String, bool) {
 
     // Identify protocol
@@ -149,6 +159,9 @@ fn delim_url(url: &str) -> (String, String, String, bool) {
 
 }
 
+// Extract HTTP code from response header
+// Returns status code
+//  (example: "HTTP/1.1 200 ok" returns "200")
 fn extract_http_code(buffer: &str) -> String {
     let regex = Regex::new(r"(?i)HTTP/.* (\d{3}) .*").unwrap();
     let captures = match regex.captures(&buffer) {
@@ -161,14 +174,17 @@ fn extract_http_code(buffer: &str) -> String {
     captures.get(1).map_or("", |m| m.as_str()).to_string()
 }
 
-
+// Generic function for reading from socket stream for both TcpStream and SSL connection
+// If profiling is enabled, function will print content to stdout
+// Returns size of resource and the status code
 fn read_stream<T: std::io::Read>(stream: &mut T, profile: bool) -> (usize, String) {
-
-    let mut buffer = [0u8; 1000];
+    let mut buffer = [0u8; 1000 * 1000];
     let mut bytes = 0;
     let mut get_status = false;
     let mut status_code = String::from("");
 
+    // while input is coming from stream, place data in buffer
+    // extract HTTP code for the first iteration
     loop {
         let bytes_read = stream.read(&mut buffer).unwrap();
         if bytes_read > 0 {
@@ -191,9 +207,14 @@ fn read_stream<T: std::io::Read>(stream: &mut T, profile: bool) -> (usize, Strin
     }
 
     (bytes, status_code)
-
 }
 
+// Create a connection to the destination ip and port
+// If connection to a https website, set up a ssl connector using openssl
+// Write GET request to socket and read/process response
+// Start the timer when first connecting to destination address
+// Stop timer after reading all the data
+// Returns size of content, time taken and status code
 fn make_request(message: &str, ip: &SocketAddr, host: &str, ssl: bool, profile: bool) -> (usize, u128, String) {
     let message = message.as_bytes();
 
@@ -216,6 +237,8 @@ fn make_request(message: &str, ip: &SocketAddr, host: &str, ssl: bool, profile: 
     (r_tuple.0, time, r_tuple.1)
 }
 
+// Resolve DNS
+// Returns SocketAddr enum after resolving DNS name
 fn resolve_host(url: &str) -> SocketAddr {
 
     let resolve = &mut url[..].to_socket_addrs();
@@ -239,6 +262,9 @@ fn resolve_host(url: &str) -> SocketAddr {
 
 }
 
+// Parses arguments using the getopt
+// Returns the url, number of request to make
+// and a boolean to check if profiling is enabled
 fn parse_args(args: &[String]) -> (String, i32, bool) {
 
     let mut opts = Options::new();
@@ -293,6 +319,8 @@ fn parse_args(args: &[String]) -> (String, i32, bool) {
 
 }
 
+// Constructs a GET request
+// Returns a GET request
 fn message_constructor(host: &str, resource: &str) -> String {
     let mut message = String::from("GET ");
     message.push_str(&resource);
