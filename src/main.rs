@@ -309,7 +309,7 @@ fn parse_args(args: &[String]) -> (String, i32, bool) {
                     x
                 },
                 Err(_) => {
-                    println!("Failed to argument for profile");
+                    println!("Failed to read argument for profile");
                     process::exit(1)
                 }
             }
