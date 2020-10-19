@@ -26,15 +26,15 @@ If `cargo build` was used, the program should be found at `target/debug/rustmark
 
 ## Screenshots
 
-![JSON response](./img/JSON response.png)
+![JSON response](./img/JSONresponse.png)
 
 Running rustmark url on `https://general-engineering-assignment.akay.workers.dev/links`
 
-![Rustmark on /links](./img/JSON Benchmark.png)
+![Rustmark on /links](./img/JSONBenchmark.png)
 
 Running rustmark benchmark on `https://general-engineering-assignment.akay.workers.dev/links`
 
-![Comparing to Postman Request](./img/Postman JSON.png)
+![Comparing to Postman Request](./img/PostmanJSON.png)
 
 Comparing response times and sizes using Postman. Response times were pretty close. Some discrepancy in the sizes due to additional headers from server for Rustmark.
 
