@@ -8,6 +8,46 @@ use regex::Regex;
 
 fn delim_url(url: &str) -> (String, String, String) {
 
+    // Identify protocol
+    let regex = Regex::new(r"(?i)(.*)://.*").unwrap();
+
+    let mut protocol = match regex.captures(&url) {
+        Some(c) => c.get(1).map_or("", |m| m.as_str()),
+        None => ""
+    };
+
+    let mut port: &str;
+
+    match protocol {
+        "http" => port = "80",
+        "https" => port = "443",
+        "" => {
+            protocol = "http";
+            port = "80";
+            println!("Protocol not defined, assuming HTTP on port 80");
+        },
+        _ => {
+            println!("Unsupported protocol");
+            process::exit(0);
+        }
+    };
+
+    // Remove scheme
+    let regex = Regex::new(r"(?i).*://(.*)").unwrap();
+
+    let url = {
+        if regex.is_match(&url) {
+            let capture = match regex.captures(&url) {
+                Some(c) => c.get(1).map_or("", |m| m.as_str()),
+                None => &url
+            };
+            capture
+        } else {
+            &url
+        }
+    };
+
+    // Separate host from resource
     let regex = Regex::new(r"(?i)([a-z0-9._\-]*)/*([a-z0-9._\-/]*)").unwrap();
 
     let captures = match regex.captures(&url) {
@@ -19,15 +59,20 @@ fn delim_url(url: &str) -> (String, String, String) {
     };
 
     let host = captures.get(1).map_or("", |m| m.as_str());
-    let resource = captures.get(2).map_or("", |m| m.as_str());
-    let port = "80";
 
+    let mut resource = captures.get(2).map_or("", |m| m.as_str());
+    if resource == "" {
+        resource = "/";
+    }
+
+    // Construct URL for TCPStream
     let mut url = String::from("");
     url.push_str(host);
     url.push_str(":");
     url.push_str(port);
 
-    (host.to_string(), url, resource.to_string())
+    (url, host.to_string(), resource.to_string())
+
 }
 
 fn make_request(message: &[u8], ip: SocketAddr) {
@@ -120,6 +165,9 @@ fn message_constructor(host: &str, resource: &str) -> String {
 fn main() {
     let args: Vec<String> = env::args().collect();
     let (url, count) = parse_args(&args);
+    let (url, host, resource) = delim_url(&url[..]);
+    println!("{} {} {}", url, host, resource);
+    /*
     let (host, url, resource) = delim_url(&url[..]);
     let ip = resolve_host(url);
 
@@ -129,4 +177,5 @@ fn main() {
         let message = message_constructor(&host, &resource);
         make_request(&message.as_bytes(), ip);
     }
+    */
 }
