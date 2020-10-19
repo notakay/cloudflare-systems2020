@@ -10,6 +10,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "devtimer"
+version = "4.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6035b7b9244bf9637cd7ef80b5e1c54404bef92cccd34738c85c45f04ae8b244"
+
+[[package]]
 name = "getopts"
 version = "0.2.21"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -52,6 +58,7 @@ checksum = "8cab7a364d15cde1e505267766a2d3c4e22a843e1a601f0fa7564c0f82ced11c"
 name = "systems-engineering-assignment"
 version = "0.1.0"
 dependencies = [
+ "devtimer",
  "getopts",
  "regex",
 ]

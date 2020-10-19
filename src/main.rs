@@ -1,9 +1,10 @@
 use std::env;
 use std::process;
+use std::io::{Read, Write};
 use std::net::*;
+use devtimer::DevTime;
 use getopts::Options;
 use regex::Regex;
-use std::io::{Read, Write};
 
 fn delim_url(url: &str) -> (String, String, String) {
 
@@ -31,13 +32,17 @@ fn delim_url(url: &str) -> (String, String, String) {
 
 fn make_request(message: &[u8], ip: SocketAddr) {
 
+    let mut timer = DevTime::new_simple();
+    timer.start();
     let mut stream = TcpStream::connect(ip).unwrap();
 
     stream.write(message).unwrap();
     let mut buffer = [0; 1000 * 1000];
 
     stream.read(&mut buffer).unwrap();
+    timer.stop();
     println!("{}", String::from_utf8_lossy(&buffer));
+    println!("The time taken for the operation was: {} millis", timer.time_in_millis().unwrap());
 }
 
 fn resolve_host(url: String) -> SocketAddr {
@@ -122,6 +127,6 @@ fn main() {
         profile(count);
     } else {
         let message = message_constructor(&host, &resource);
-        let buf = make_request(&message.as_bytes(), ip);
+        make_request(&message.as_bytes(), ip);
     }
 }
