@@ -4,7 +4,7 @@ use std::io::{Read, Write};
 use std::net::*;
 use devtimer::DevTime;
 use getopts::Options;
-use openssl::ssl::{SslMethod, SslConnector};
+use openssl::ssl::{SslMethod, SslConnector, SslStream};
 use regex::Regex;
 
 fn delim_url(url: &str) -> (String, String, String, bool) {
@@ -78,25 +78,60 @@ fn delim_url(url: &str) -> (String, String, String, bool) {
 
 }
 
+fn ssl_read(ssl_stream: &mut SslStream<TcpStream>) -> usize {
+
+    let mut buffer = [0u8; 1000];
+    let mut bytes = 0;
+
+    loop {
+        let bytes_read = ssl_stream.read(&mut buffer).unwrap();
+        if bytes_read > 0 {
+            bytes += bytes_read;
+        } else {
+            break;
+        }
+    }
+
+    bytes
+}
+
+fn tcp_read(stream: &mut TcpStream) -> usize {
+
+    let mut buffer = [0u8; 1000];
+    let mut bytes = 0;
+
+    loop {
+        let bytes_read = stream.read(&mut buffer).unwrap();
+        if bytes_read > 0 {
+            bytes += bytes_read;
+        } else {
+            break;
+        }
+    }
+
+    bytes
+}
+
 fn make_request(message: &[u8], ip: SocketAddr, host: String, ssl: bool) {
 
     let mut timer = DevTime::new_simple();
     timer.start();
 
     let mut stream = TcpStream::connect(ip).unwrap();
-    let mut buffer = [0; 1000 * 1000];
+    let mut bytes = 0;
 
     if ssl {
         let connector = SslConnector::builder(SslMethod::tls()).unwrap().build();
-        let mut tcp_stream = connector.connect(&host, stream).unwrap();
-        tcp_stream.write_all(message).unwrap();
-        tcp_stream.read(&mut buffer).unwrap();
+        let mut ssl_stream = connector.connect(&host, stream).unwrap();
+        ssl_stream.write_all(message).unwrap();
+        bytes = ssl_read(&mut ssl_stream);
     } else {
         stream.write_all(message).unwrap();
-        stream.read(&mut buffer).unwrap();
+        bytes = tcp_read(&mut stream);
     }
     timer.stop();
-    println!("{}", String::from_utf8_lossy(&buffer));
+    //println!("{}", String::from_utf8_lossy(&buffer));
+    println!("{} bytes read", bytes);
     println!("The time taken for the operation was: {} millis", timer.time_in_millis().unwrap());
 }
 
@@ -164,6 +199,7 @@ fn message_constructor(host: &str, resource: &str) -> String {
     message.push_str(" HTTP/1.1\r\n");
     message.push_str("Host: ");
     message.push_str(&host);
+    message.push_str("\r\nConnection: close");
     message.push_str("\r\n\r\n");
     message
 }
