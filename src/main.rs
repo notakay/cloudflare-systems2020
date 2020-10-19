@@ -89,7 +89,7 @@ fn delim_url(url: &str) -> (String, String, String, bool) {
         }
         _ => {
             println!("Unsupported protocol");
-            process::exit(0);
+            process::exit(1);
         }
     };
 
@@ -115,7 +115,7 @@ fn delim_url(url: &str) -> (String, String, String, bool) {
         Some(c) => c,
         None => {
             println!("Invalid URL");
-            process::exit(0);
+            process::exit(1);
         }
     };
 
@@ -192,7 +192,7 @@ fn resolve_host(url: &str) -> SocketAddr {
             println!("Could not resolve host.");
             println!("Please make sure a valid URL is being used.");
             println!("URL must be in format [www.example.com/resource].");
-            process::exit(0)
+            process::exit(1)
         }
     };
 
@@ -200,7 +200,7 @@ fn resolve_host(url: &str) -> SocketAddr {
         Some(i) => i,
         None => {
             println!("Could not resolve host");
-            process::exit(0)
+            process::exit(1)
         }
     }
 
@@ -217,26 +217,35 @@ fn parse_args(args: &[String]) -> (String, i32, bool) {
 
     let matches = match opts.parse(&args[1..]) {
         Ok(m) => { m },
-        Err(f) => { panic!(f.to_string()) }
+        Err(_) => {
+            println!("Failed to read argument");
+            process::exit(1)
+        }
     };
 
     if matches.opt_present("h") {
         println!("{}", opts.usage("Usage"));
-        process::exit(0);
+        process::exit(1);
     };
 
     let url = match matches.opt_str("u") {
         Some(u) => u.to_string(),
         None => {
             println!("Error reading URL");
-            process::exit(0);
+            process::exit(1);
         }
     };
 
     let count = match matches.opt_str("p") {
         Some(p) => {
             profile = true;
-            p.trim().parse().expect("Expected a number for --profile")
+            match p.trim().parse() {
+                Ok(x) => x,
+                Err(_) => {
+                    println!("Failed to argument for profile");
+                    process::exit(1)
+                }
+            }
         },
         None => 1
     };
