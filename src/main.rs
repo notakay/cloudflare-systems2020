@@ -178,7 +178,7 @@ fn extract_http_code(buffer: &str) -> String {
 // If profiling is enabled, function will print content to stdout
 // Returns size of resource and the status code
 fn read_stream<T: std::io::Read>(stream: &mut T, profile: bool) -> (usize, String) {
-    let mut buffer = [0u8; 1000 * 1000];
+    let mut buffer = [0u8; 1000];
     let mut bytes = 0;
     let mut get_status = false;
     let mut status_code = String::from("");
@@ -197,6 +197,8 @@ fn read_stream<T: std::io::Read>(stream: &mut T, profile: bool) -> (usize, Strin
                 status_code = extract_http_code(&status_code);
                 get_status = true;
             }
+            // Set buffer to a new chunk of memory
+            buffer = [0u8; 1000];
         } else {
             break;
         }
